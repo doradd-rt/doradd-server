@@ -4,3 +4,6 @@
 [submodule "external/verona-rt"]
 	path = external/verona-rt
 	url = https://github.com/microsoft/verona-rt.git
+[submodule "external/snmalloc"]
+	path = external/snmalloc
+	url = https://github.com/microsoft/snmalloc.git

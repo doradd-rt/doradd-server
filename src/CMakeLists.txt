@@ -5,16 +5,15 @@ include(ExternalProject)
 
 add_executable(server main.cc)
 
-message(${CMAKE_SOURCE_DIR})
 
-# Add verona includes
-ExternalProject_Add(verona-rt
-  SOURCE_DIR ${CMAKE_SOURCE_DIR}/../external/verona-rt
-  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/verona-rt
-  #CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-)
+# This is the correct way to link
+#ExternalProject_Add(verona-rt
+#  SOURCE_DIR ${CMAKE_SOURCE_DIR}/../external/verona-rt
+#  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/verona-rt
+#)
+#add_dependencies(server verona-rt)
+#target_link_libraries(server INTERFACE verona_rt)
 
-add_dependencies(server verona-rt)
-target_link_libraries(server INTERFACE verona_rt)
-#target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/../external/verona-rt/src/rt)
-#target_include_directories(server PRIVATE ${VERONA_PATH}/external/snmalloc/src)
+target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/../external/verona-rt/src/rt)
+# This shouldn't be a submodule
+target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/../external/snmalloc/src)

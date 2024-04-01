@@ -1,7 +1,9 @@
 #include <iostream>
 #include <verona.h>
+#include <cpp/when.h>
 
 using namespace verona::rt;
+using namespace verona::cpp;
 
 int main(int argc, char **argv) {
   uint8_t nr_cpu = atoi(argv[1]);
@@ -10,4 +12,9 @@ int main(int argc, char **argv) {
 	Scheduler::set_detect_leaks(true);
 	sched.set_fair(true);
 	sched.init(nr_cpu);
+
+  when() << []{ std::cout << "hello behaviours\n"; };
+  when() << []{ while(1); };
+
+  sched.run();
 }
