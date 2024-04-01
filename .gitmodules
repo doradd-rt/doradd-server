@@ -1,3 +1,6 @@
 [submodule "external/dpdk"]
 	path = external/dpdk
 	url = https://github.com/DPDK/dpdk.git
+[submodule "external/verona-rt"]
+	path = external/verona-rt
+	url = https://github.com/microsoft/verona-rt.git
