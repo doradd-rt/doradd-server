@@ -17,3 +17,7 @@ add_executable(server main.cc)
 target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/../external/verona-rt/src/rt)
 # This shouldn't be a submodule
 target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/../external/snmalloc/src)
+
+# enable external threading in verona-rt
+target_compile_definitions(server PRIVATE -DVERONA_EXTERNAL_THREADING)
+target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR})
