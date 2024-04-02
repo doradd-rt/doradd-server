@@ -16,6 +16,9 @@ int main(int argc, char **argv) {
 
   printf("There are %d cores\n", rte_lcore_count());
 
+  // Use the last lcores to schedule what you need
+  // FIXME
+
   // One dispatcher core and the rest are for the runtime
   uint8_t nr_cpu = rte_lcore_count() - 1;
 
@@ -35,7 +38,15 @@ int main(int argc, char **argv) {
       ;
   };
 
+  when() << [] {
+    std::cout << "hello behaviours3\n";
+    while (1)
+      ;
+  };
+
   std::cout << "Will now run the scheduluer\n";
+
+  // The verona runtime will use the first lcores
   sched.run();
 }
 
