@@ -11,6 +11,7 @@ extern "C" {
 }
 
 extern rte_mempool *pktmbuf_pool;
+RTE_DECLARE_PER_LCORE(uint8_t, queue_id);
 
 /* DPDK functionality */
 void dpdk_init(int *argc, char ***argv);
@@ -74,13 +75,8 @@ struct DPDKManager {
     printf("I found %" PRIu8 " ports\n", nb_ports);
 
     /* 1 RX queue. N-1 TX queues for each  worker */
-#if 0
-    nb_rx_q = 1; 
-    nb_tx_q = rte_lcore_count() - 1;
-#endif
-    // FIXME
-    nb_rx_q = 1;
-    nb_tx_q = 1;
+    nb_rx_q = rte_lcore_count() - DISPATCHER_CORES + 1;
+    nb_tx_q = nb_rx_q;
 
     /* Configure the device */
     ret = rte_eth_dev_configure(port_id, nb_rx_q, nb_tx_q, &port_conf);
@@ -135,9 +131,9 @@ struct DPDKManager {
 
   static void dpdk_poll(uint8_t queue_id) {
     int ret = 0;
-    struct rte_mbuf *rx_pkts[BATCH_SIZE];
+    struct rte_mbuf *rx_pkts[DPDK_BATCH_SIZE];
 
-    ret = rte_eth_rx_burst(0, queue_id, rx_pkts, BATCH_SIZE);
+    ret = rte_eth_rx_burst(0, queue_id, rx_pkts, DPDK_BATCH_SIZE);
     if (!ret)
       return;
 

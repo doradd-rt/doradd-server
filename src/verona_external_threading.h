@@ -2,6 +2,8 @@
 #include <iostream>
 #include <memory>
 
+#include <dpdk.h>
+
 extern "C" {
 #include <rte_lcore.h>
 }
@@ -9,28 +11,32 @@ extern "C" {
 class PlatformThread {
 public:
   template <class ThreadArgs> static int proxy_fn(void *args_ptr) {
-    std::cout << "hello from the new verona thread\n";
-
     auto args = static_cast<ThreadArgs *>(args_ptr);
 
     // Deferred, exception-safe destructor.
     std::unique_ptr<ThreadArgs> thread_args_ptr(args);
 
-    std::apply(std::get<0>(*args), std::get<1>(*args));
+    std::cout << "hello from the new verona thread. Queue id "
+              << std::get<0>(*args) << std::endl;
+
+    RTE_PER_LCORE(queue_id) = std::get<0>(*args);
+
+    std::apply(std::get<1>(*args), std::get<2>(*args));
 
     return 0;
   }
 
   template <typename F, typename... Args>
   PlatformThread(F &&f, Args &&...args) {
+    static int worker_count = 1;
     auto fused_args = std::forward_as_tuple(args...);
 
-    typedef std::tuple<typename std::decay<F>::type,
+    typedef std::tuple<int, typename std::decay<F>::type,
                        std::tuple<typename std::decay<Args>::type...>>
         ThreadArgs;
     // Deferred, exception-safe destructor.
     auto thread_args_ptr =
-        std::make_unique<ThreadArgs>(f, std::move(fused_args));
+        std::make_unique<ThreadArgs>(worker_count++, f, std::move(fused_args));
 
     static int i = -1;
     int val = rte_get_next_lcore(i, 1, 0);
