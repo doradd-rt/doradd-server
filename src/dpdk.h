@@ -16,8 +16,8 @@ RTE_DECLARE_PER_LCORE(uint8_t, queue_id);
 /* DPDK functionality */
 void dpdk_init(int *argc, char ***argv);
 void dpdk_terminate(void);
-void dpdk_poll(uint8_t queue_id);
-void dpdk_out(struct rte_mbuf *pkt, uint8_t queue_id);
+void dpdk_poll(void);
+void dpdk_out(struct rte_mbuf *pkt);
 
 /* Expected functionality */
 void process_pkt(rte_mbuf *pkt);
@@ -129,11 +129,12 @@ struct DPDKManager {
     rte_eth_dev_close(port_id);
   }
 
-  static void dpdk_poll(uint8_t queue_id) {
+  static void dpdk_poll(void) {
     int ret = 0;
     struct rte_mbuf *rx_pkts[DPDK_BATCH_SIZE];
 
-    ret = rte_eth_rx_burst(0, queue_id, rx_pkts, DPDK_BATCH_SIZE);
+    ret =
+        rte_eth_rx_burst(0, RTE_PER_LCORE(queue_id), rx_pkts, DPDK_BATCH_SIZE);
     if (!ret)
       return;
 
@@ -141,11 +142,11 @@ struct DPDKManager {
       process_pkt(rx_pkts[i]);
   }
 
-  static void dpdk_out(struct rte_mbuf *pkt, uint8_t queue_id) {
+  static void dpdk_out(struct rte_mbuf *pkt) {
     int ret = 0;
 
     while (1) {
-      ret = rte_eth_tx_burst(0, queue_id, &pkt, 1);
+      ret = rte_eth_tx_burst(0, RTE_PER_LCORE(queue_id), &pkt, 1);
       if (ret == 1)
         break;
     }
