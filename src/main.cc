@@ -44,24 +44,9 @@ int main(int argc, char **argv) {
   sched.set_fair(true);
   sched.init(worker_count);
 
-  when() << [] {
-    std::cout << "hello behaviours1\n";
-    std::cout << "local lcore id is " << rte_lcore_id() << std::endl;
-    while (1)
-      ;
-  };
-  when() << [] {
-    std::cout << "hello behaviours2\n";
-    std::cout << "local lcore id is " << rte_lcore_id() << std::endl;
-    while (1)
-      ;
-  };
-
-  when() << [] {
-    std::cout << "hello behaviours3\n";
-    std::cout << "local lcore id is " << rte_lcore_id() << std::endl;
-    while (1)
-      ;
+  when() << []() {
+    std::cout << "Add external event source\n";
+    Scheduler::add_external_event_source();
   };
 
   std::cout << "Will now run the scheduluer\n";

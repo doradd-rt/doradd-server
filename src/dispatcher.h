@@ -1,20 +1,26 @@
 #pragma once
 
+#include <cpp/when.h>
 #include <iostream>
+#include <verona.h>
 
 #include <dpdk.h>
+#include <net.h>
 
 extern "C" {
 #include <rte_flow.h>
 }
 
+using namespace verona::cpp;
+
 extern rte_mbuf *pkt_buff[DPDK_BATCH_SIZE];
 extern uint8_t pkt_count;
 
 template <typename T> class Dispatcher {
-  static const uint32_t BUFFER_SIZE = 512;
+  static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
 
   uint32_t curr_idx;
+  uint32_t dispatch_idx;
   T buffer[BUFFER_SIZE];
 
   void configure_rx_queue() {
@@ -40,7 +46,7 @@ template <typename T> class Dispatcher {
     pattern[0].type = RTE_FLOW_ITEM_TYPE_ETH;
     pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
 
-    queue.index = 0; // RTE_PER_LCORE(queue_id);
+    queue.index = RTE_PER_LCORE(queue_id);
     actions[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
     actions[0].conf = &queue;
     actions[1].type = RTE_FLOW_ACTION_TYPE_END;
@@ -54,9 +60,54 @@ template <typename T> class Dispatcher {
     assert(f);
   }
 
-  void dispatch() {}
+  void dispatch() {
+    // FIXME: Just schedule the calls for now.
+    // Should call the transactions eventually
+    while (dispatch_idx < curr_idx) {
+      rte_mbuf *pkt = reinterpret_cast<rte_mbuf *>(buffer[dispatch_idx]);
+      when() << [=]() {
+        std::cout << "Will echo the packet back\n";
 
-  void parse_pkts() {}
+        rte_ether_hdr *ethh = rte_pktmbuf_mtod(pkt, rte_ether_hdr *);
+        rte_ipv4_hdr *iph = reinterpret_cast<rte_ipv4_hdr *>(ethh + 1);
+        rte_udp_hdr *udph = reinterpret_cast<rte_udp_hdr *>(iph + 1);
+
+        uint16_t payload_len =
+            rte_be_to_cpu_16(udph->dgram_len) - sizeof(rte_udp_hdr);
+        uint16_t overall_len = payload_len;
+
+        // switch src dst ports
+        udp_out_prepare(udph, rte_be_to_cpu_16(udph->dst_port),
+                        rte_be_to_cpu_16(udph->src_port), overall_len);
+        overall_len += sizeof(rte_udp_hdr);
+
+        ip_out_prepare(iph, local_ip, rte_be_to_cpu_32(iph->src_addr), 64, 0,
+                       IPPROTO_UDP, overall_len);
+        overall_len += sizeof(rte_ipv4_hdr);
+
+        eth_out_prepare(ethh, RTE_ETHER_TYPE_IPV4,
+                        get_mac_addr(rte_be_to_cpu_32(iph->src_addr)));
+        overall_len += sizeof(rte_ether_hdr);
+
+        pkt->data_len = overall_len;
+        pkt->pkt_len = overall_len;
+        net_send_pkt(pkt);
+      };
+
+      dispatch_idx++;
+    }
+  }
+
+  void parse_pkts() {
+    for (int i = 0; i < pkt_count; i++) {
+      // FIXME: Just keep the packet address for now
+      // Parsing should populate an app-specific transaction stuct, hence T
+      buffer[curr_idx++ & (BUFFER_SIZE - 1)] =
+          reinterpret_cast<uint64_t>(pkt_buff[i]);
+    }
+
+    pkt_count = 0;
+  }
 
   int main() {
     configure_rx_queue();
@@ -77,7 +128,7 @@ template <typename T> class Dispatcher {
     return 0;
   }
 
-  Dispatcher() : curr_idx(0) {
+  Dispatcher() : curr_idx(0), dispatch_idx(0) {
     bzero(pkt_buff, sizeof(pkt_buff));
     pkt_count = 0;
 

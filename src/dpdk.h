@@ -35,11 +35,11 @@ struct DPDKManager {
     const struct rte_eth_conf port_conf = {
         .rxmode =
             {
-                /* Disable next 2 fields for debugging on the tap interface */
-                //.mtu = RTE_ETHER_MAX_LEN,
-                //.offloads = DEV_RX_OFFLOAD_IPV4_CKSUM |
-                // DEV_RX_OFFLOAD_KEEP_CRC,
                 .mq_mode = RTE_ETH_MQ_RX_RSS,
+                // FIXME: Enable offloads when running on the device
+                //.mtu = RTE_ETHER_MAX_LEN,
+                //.offloads = RTE_ETH_RX_OFFLOAD_IPV4_CKSUM |
+                //RTE_ETH_RX_OFFLOAD_UDP_CKSUM | RTE_ETH_RX_OFFLOAD_KEEP_CRC,
             },
         .txmode =
             {
