@@ -3,6 +3,7 @@
 #include <cpp/when.h>
 #include <dpdk.h>
 #include <iostream>
+#include <net.h>
 #include <verona.h>
 
 #include <dispatcher.h>
@@ -18,6 +19,8 @@ int main(int argc, char **argv) {
   printf("Hello dorad DPDK server\n");
 
   DPDKManager::dpdk_init(&argc, &argv);
+
+  net_init();
 
   printf("There are %d cores\n", rte_lcore_count());
 
@@ -67,6 +70,3 @@ int main(int argc, char **argv) {
   RTE_PER_LCORE(queue_id) = 0;
   sched.run();
 }
-
-// Temporary here
-void process_pkt(rte_mbuf *pkt) { std::cout << "Will process pkt\n"; }

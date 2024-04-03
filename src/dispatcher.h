@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#include <dpdk.h>
+
 extern "C" {
 #include <rte_flow.h>
 }
@@ -47,6 +49,10 @@ class Dispatcher {
 public:
   void main() {
     configure_rx_queue();
+
+    while (1) {
+      DPDKManager::dpdk_poll();
+    }
 
     std::cout << "Configured the flow director without a problem\n";
   }

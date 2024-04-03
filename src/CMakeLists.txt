@@ -3,7 +3,7 @@ project(dorad-server CXX)
 
 include(ExternalProject)
 
-add_executable(server main.cc)
+add_executable(server main.cc net.cc)
 
 
 # This is the correct way to link
