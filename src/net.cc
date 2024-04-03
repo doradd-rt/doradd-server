@@ -2,11 +2,16 @@
 
 #include "arp-cfg.h"
 #include "config.h"
+#include "dispatcher.h"
 #include "dpdk.h"
 #include "net.h"
 
 uint32_t local_ip;
 static struct rte_ether_addr known_haddrs[ARP_ENTRIES_COUNT];
+
+// Hack to communicate between templated dispatcher and non-templated netstack
+rte_mbuf *pkt_buff[DPDK_BATCH_SIZE];
+uint8_t pkt_count;
 
 static void arp_init(void) {
   printf("arp_init()\n");
@@ -32,4 +37,4 @@ void process_pkt(rte_mbuf *pkt) { eth_in(pkt); }
 
 void net_send_pkt(rte_mbuf *pkt) { DPDKManager::dpdk_out(pkt); }
 
-void udp_pkt_process(struct rte_mbuf *pkt) { assert(0); }
+void udp_pkt_process(struct rte_mbuf *pkt) { pkt_buff[pkt_count++] = pkt; }

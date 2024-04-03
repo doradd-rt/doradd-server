@@ -8,7 +8,15 @@ extern "C" {
 #include <rte_flow.h>
 }
 
-class Dispatcher {
+extern rte_mbuf *pkt_buff[DPDK_BATCH_SIZE];
+extern uint8_t pkt_count;
+
+template <typename T> class Dispatcher {
+  static const uint32_t BUFFER_SIZE = 512;
+
+  uint32_t curr_idx;
+  T buffer[BUFFER_SIZE];
+
   void configure_rx_queue() {
     // Receive all packets in the dispatcher queue
     int ret;
@@ -46,16 +54,40 @@ class Dispatcher {
     assert(f);
   }
 
-public:
-  void main() {
+  void dispatch() {}
+
+  void parse_pkts() {}
+
+  int main() {
     configure_rx_queue();
+
+    std::cout << "Configured the flow director without a problem\n";
 
     while (1) {
       DPDKManager::dpdk_poll();
+
+      // Parse a batch of received pkts
+      parse_pkts();
+
+      // Dispatch the parsed packets
+      // FIXME: For now schedule directly
+      dispatch();
     }
 
-    std::cout << "Configured the flow director without a problem\n";
+    return 0;
   }
+
+  Dispatcher() : curr_idx(0) {
+    bzero(pkt_buff, sizeof(pkt_buff));
+    pkt_count = 0;
+
+    // FIXME: Schedule the other dispathcer threads here
+  }
+
+public:
+  void process_pkt(rte_mbuf *pkt) { Dispatcher::process_pkt(pkt); }
+
+  static Dispatcher *dispatcher_ptr;
 
   static int main(void *arg) {
     uint8_t q = reinterpret_cast<uint64_t>(arg);
@@ -64,7 +96,6 @@ public:
     std::cout << "Hello from the dispatcher. Local queue " << q << std::endl;
 
     Dispatcher d;
-
     d.main();
 
     return 0;

@@ -34,8 +34,8 @@ int main(int argc, char **argv) {
     if (++count < worker_count)
       continue;
     std::cout << "The dispatcher will run on " << lcore_id << std::endl;
-    rte_eal_remote_launch(Dispatcher::main, reinterpret_cast<void *>(count),
-                          lcore_id);
+    rte_eal_remote_launch(Dispatcher<uint64_t>::main,
+                          reinterpret_cast<void *>(count), lcore_id);
     break;
   }
 
