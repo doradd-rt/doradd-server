@@ -72,6 +72,8 @@ template <typename T> class Dispatcher {
         rte_ipv4_hdr *iph = reinterpret_cast<rte_ipv4_hdr *>(ethh + 1);
         rte_udp_hdr *udph = reinterpret_cast<rte_udp_hdr *>(iph + 1);
 
+        uint32_t dst_ip = rte_be_to_cpu_32(iph->src_addr);
+
         uint16_t payload_len =
             rte_be_to_cpu_16(udph->dgram_len) - sizeof(rte_udp_hdr);
         uint16_t overall_len = payload_len;
@@ -85,8 +87,7 @@ template <typename T> class Dispatcher {
                        IPPROTO_UDP, overall_len);
         overall_len += sizeof(rte_ipv4_hdr);
 
-        eth_out_prepare(ethh, RTE_ETHER_TYPE_IPV4,
-                        get_mac_addr(rte_be_to_cpu_32(iph->src_addr)));
+        eth_out_prepare(ethh, RTE_ETHER_TYPE_IPV4, get_mac_addr(dst_ip));
         overall_len += sizeof(rte_ether_hdr);
 
         pkt->data_len = overall_len;
