@@ -1,21 +1,18 @@
-#include <iostream>
-
 #include <cpp/when.h>
+#include <dispatcher.h>
 #include <dpdk.h>
 #include <iostream>
 #include <net.h>
 #include <verona.h>
 
-#include <dispatcher.h>
-
 using namespace verona::rt;
 using namespace verona::cpp;
 
-struct rte_mempool *pktmbuf_pool;
+struct rte_mempool* pktmbuf_pool;
 RTE_DEFINE_PER_LCORE(uint8_t, queue_id);
 
-int main(int argc, char **argv) {
-
+int main(int argc, char** argv)
+{
   printf("Hello dorad DPDK server\n");
 
   DPDKManager::dpdk_init(&argc, &argv);
@@ -30,16 +27,17 @@ int main(int argc, char **argv) {
   // The first worker_count cores will be the workers and the last
   // DISPATCHER_CORES will be for the dispatcher
   int lcore_id, count = 0;
-  RTE_LCORE_FOREACH_WORKER(lcore_id) {
+  RTE_LCORE_FOREACH_WORKER(lcore_id)
+  {
     if (++count < worker_count)
       continue;
     std::cout << "The dispatcher will run on " << lcore_id << std::endl;
-    rte_eal_remote_launch(Dispatcher<uint64_t>::main,
-                          reinterpret_cast<void *>(count), lcore_id);
+    rte_eal_remote_launch(
+      Dispatcher<uint64_t>::main, reinterpret_cast<void*>(count), lcore_id);
     break;
   }
 
-  auto &sched = Scheduler::get();
+  auto& sched = Scheduler::get();
   Scheduler::set_detect_leaks(true);
   sched.set_fair(true);
   sched.init(worker_count);

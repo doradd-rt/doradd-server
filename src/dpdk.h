@@ -2,7 +2,8 @@
 
 #include "config.h"
 
-extern "C" {
+extern "C"
+{
 #include <rte_eal.h>
 #include <rte_ethdev.h>
 #include <rte_ether.h>
@@ -10,20 +11,22 @@ extern "C" {
 #include <rte_timer.h>
 }
 
-extern rte_mempool *pktmbuf_pool;
+extern rte_mempool* pktmbuf_pool;
 RTE_DECLARE_PER_LCORE(uint8_t, queue_id);
 
 /* DPDK functionality */
-void dpdk_init(int *argc, char ***argv);
+void dpdk_init(int* argc, char*** argv);
 void dpdk_terminate(void);
 void dpdk_poll(void);
-void dpdk_out(struct rte_mbuf *pkt);
+void dpdk_out(struct rte_mbuf* pkt);
 
 /* Expected functionality */
-void process_pkt(rte_mbuf *pkt);
+void process_pkt(rte_mbuf* pkt);
 
-struct DPDKManager {
-  static void dpdk_init(int *argc, char ***argv) {
+struct DPDKManager
+{
+  static void dpdk_init(int* argc, char*** argv)
+  {
     int ret, nb_ports, i;
     uint8_t port_id = 0;
     uint16_t nb_rx_q;
@@ -33,26 +36,26 @@ struct DPDKManager {
     struct rte_eth_link link;
 
     const struct rte_eth_conf port_conf = {
-        .rxmode =
+      .rxmode =
+        {
+          .mq_mode = RTE_ETH_MQ_RX_RSS,
+          // FIXME: Enable offloads when running on the device
+          //.mtu = RTE_ETHER_MAX_LEN,
+          //.offloads = RTE_ETH_RX_OFFLOAD_IPV4_CKSUM |
+          // RTE_ETH_RX_OFFLOAD_UDP_CKSUM | RTE_ETH_RX_OFFLOAD_KEEP_CRC,
+        },
+      .txmode =
+        {
+          .mq_mode = RTE_ETH_MQ_TX_NONE,
+        },
+      .rx_adv_conf =
+        {
+          .rss_conf =
             {
-                .mq_mode = RTE_ETH_MQ_RX_RSS,
-                // FIXME: Enable offloads when running on the device
-                //.mtu = RTE_ETHER_MAX_LEN,
-                //.offloads = RTE_ETH_RX_OFFLOAD_IPV4_CKSUM |
-                //RTE_ETH_RX_OFFLOAD_UDP_CKSUM | RTE_ETH_RX_OFFLOAD_KEEP_CRC,
+              .rss_hf =
+                RTE_ETH_RSS_NONFRAG_IPV4_TCP | RTE_ETH_RSS_NONFRAG_IPV4_UDP,
             },
-        .txmode =
-            {
-                .mq_mode = RTE_ETH_MQ_TX_NONE,
-            },
-        .rx_adv_conf =
-            {
-                .rss_conf =
-                    {
-                        .rss_hf = RTE_ETH_RSS_NONFRAG_IPV4_TCP |
-                                  RTE_ETH_RSS_NONFRAG_IPV4_UDP,
-                    },
-            },
+        },
     };
 
     ret = rte_eal_init(*argc, *argv);
@@ -62,9 +65,13 @@ struct DPDKManager {
     *argv += ret;
 
     /* create the mbuf pool */
-    pktmbuf_pool =
-        rte_pktmbuf_pool_create("mbuf_pool", NB_MBUF, MEMPOOL_CACHE_SIZE, 0,
-                                RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+    pktmbuf_pool = rte_pktmbuf_pool_create(
+      "mbuf_pool",
+      NB_MBUF,
+      MEMPOOL_CACHE_SIZE,
+      0,
+      RTE_MBUF_DEFAULT_BUF_SIZE,
+      rte_socket_id());
     if (pktmbuf_pool == NULL)
       rte_exit(EXIT_FAILURE, "Cannot init mbuf pool\n");
 
@@ -81,25 +88,37 @@ struct DPDKManager {
     /* Configure the device */
     ret = rte_eth_dev_configure(port_id, nb_rx_q, nb_tx_q, &port_conf);
 
-    for (i = 0; i < nb_rx_q; i++) {
+    for (i = 0; i < nb_rx_q; i++)
+    {
       printf("setting up RX queues...\n");
-      ret = rte_eth_rx_queue_setup(port_id, i, nb_rx_desc,
-                                   rte_eth_dev_socket_id(port_id), NULL,
-                                   pktmbuf_pool);
+      ret = rte_eth_rx_queue_setup(
+        port_id,
+        i,
+        nb_rx_desc,
+        rte_eth_dev_socket_id(port_id),
+        NULL,
+        pktmbuf_pool);
 
       if (ret < 0)
-        rte_exit(EXIT_FAILURE, "rte_eth_rx_queue_setup:err=%d, port=%u\n", ret,
-                 (unsigned)port_id);
+        rte_exit(
+          EXIT_FAILURE,
+          "rte_eth_rx_queue_setup:err=%d, port=%u\n",
+          ret,
+          (unsigned)port_id);
     }
 
-    for (i = 0; i < nb_tx_q; i++) {
+    for (i = 0; i < nb_tx_q; i++)
+    {
       printf("setting up TX queues...\n");
-      ret = rte_eth_tx_queue_setup(port_id, i, nb_tx_desc,
-                                   rte_eth_dev_socket_id(port_id), NULL);
+      ret = rte_eth_tx_queue_setup(
+        port_id, i, nb_tx_desc, rte_eth_dev_socket_id(port_id), NULL);
 
       if (ret < 0)
-        rte_exit(EXIT_FAILURE, "rte_eth_tx_queue_setup:err=%d, port=%u\n", ret,
-                 (unsigned)port_id);
+        rte_exit(
+          EXIT_FAILURE,
+          "rte_eth_tx_queue_setup:err=%d, port=%u\n",
+          ret,
+          (unsigned)port_id);
     }
 
     /* start the device */
@@ -115,13 +134,15 @@ struct DPDKManager {
     if (!link.link_status)
       printf("eth:\tlink appears to be down, check connection.\n");
     else
-      printf("eth:\tlink up - speed %u Mbps, %s\n", (uint32_t)link.link_speed,
-             (link.link_duplex == RTE_ETH_LINK_FULL_DUPLEX)
-                 ? ("full-duplex")
-                 : ("half-duplex\n"));
+      printf(
+        "eth:\tlink up - speed %u Mbps, %s\n",
+        (uint32_t)link.link_speed,
+        (link.link_duplex == RTE_ETH_LINK_FULL_DUPLEX) ? ("full-duplex") :
+                                                         ("half-duplex\n"));
   }
 
-  static void dpdk_terminate(void) {
+  static void dpdk_terminate(void)
+  {
     int8_t port_id = 0;
 
     printf("Closing port %d...", port_id);
@@ -129,12 +150,13 @@ struct DPDKManager {
     rte_eth_dev_close(port_id);
   }
 
-  static void dpdk_poll(void) {
+  static void dpdk_poll(void)
+  {
     int ret = 0;
-    struct rte_mbuf *rx_pkts[DPDK_BATCH_SIZE];
+    struct rte_mbuf* rx_pkts[DPDK_BATCH_SIZE];
 
     ret =
-        rte_eth_rx_burst(0, RTE_PER_LCORE(queue_id), rx_pkts, DPDK_BATCH_SIZE);
+      rte_eth_rx_burst(0, RTE_PER_LCORE(queue_id), rx_pkts, DPDK_BATCH_SIZE);
     if (!ret)
       return;
 
@@ -142,10 +164,12 @@ struct DPDKManager {
       process_pkt(rx_pkts[i]);
   }
 
-  static void dpdk_out(struct rte_mbuf *pkt) {
+  static void dpdk_out(struct rte_mbuf* pkt)
+  {
     int ret = 0;
 
-    while (1) {
+    while (1)
+    {
       ret = rte_eth_tx_burst(0, RTE_PER_LCORE(queue_id), &pkt, 1);
       if (ret == 1)
         break;
