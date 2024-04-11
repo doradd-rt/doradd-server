@@ -43,7 +43,7 @@ public:
     std::cout << "Creating a verona thread on lcore " << val << std::endl;
     i = val;
 
-    rte_eal_remote_launch(&proxy_fn<ThreadArgs>, thread_args_ptr.get(), val);
+    rte_eal_remote_launch(&proxy_fn<ThreadArgs>, thread_args_ptr.release(), val);
   }
 
   void join() { assert(0); }
