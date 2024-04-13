@@ -3,8 +3,10 @@ project(dorad-server CXX)
 
 include(ExternalProject)
 
+set(CMAKE_CXX_STANDARD 17)
 add_executable(server main.cc net.cc)
 
+target_compile_options(server PRIVATE -Wno-narrowing)
 
 # This is the correct way to link
 #ExternalProject_Add(verona-rt

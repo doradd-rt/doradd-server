@@ -1,1 +1,8 @@
+src/build/
+src/dbg-build/
+scripts/*.txt
+
 *.swp
+*.txt
+*.log
+*.out
