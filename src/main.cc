@@ -5,11 +5,40 @@
 #include <net.h>
 #include <verona.h>
 
+#include "db.h"
+#include "ycsb.h"
+
 using namespace verona::rt;
 using namespace verona::cpp;
 
 struct rte_mempool* pktmbuf_pool;
 RTE_DEFINE_PER_LCORE(uint8_t, queue_id);
+
+// FIXME: should also be templated
+int workload_init()
+{
+  YCSBTransaction::index = new Index<YCSBRow>;
+
+  /* uint64_t cown_prev_addr = 0; */
+  /* uint8_t* cown_arr_addr = static_cast<uint8_t*>(aligned_alloc_hpage( */
+  /*       1024 * DB_SIZE)); */
+
+  for (int i = 0; i < DB_SIZE; i++)
+  {
+    /* cown_ptr<YCSBRow> cown_r = make_cown_custom<YCSBRow>( */
+    /*     reinterpret_cast<void *>(cown_arr_addr + (uint64_t)1024 * i)); */
+
+    /* if (i > 0) */
+    /*   assert((cown_r.get_base_addr() - cown_prev_addr) == 1024); */
+    /* cown_prev_addr = cown_r.get_base_addr(); */
+    
+    cown_ptr<YCSBRow> cown_r = make_cown<YCSBRow>();
+
+    YCSBTransaction::index->insert_row(cown_r);
+  }
+
+  return 0;
+}
 
 int main(int argc, char** argv)
 {
@@ -18,6 +47,8 @@ int main(int argc, char** argv)
   DPDKManager::dpdk_init(&argc, &argv);
 
   net_init();
+
+  workload_init();
 
   printf("There are %d cores\n", rte_lcore_count());
 
@@ -32,7 +63,7 @@ int main(int argc, char** argv)
       continue;
     std::cout << "The rpc handler will run on " << lcore_id << std::endl;
     rte_eal_remote_launch(
-      RPCHandler<YCSBTransactionMarshalled>::main, reinterpret_cast<void*>(count), lcore_id);
+      RPCHandler<YCSBTransaction>::main, reinterpret_cast<void*>(count), lcore_id);
     break;
   }
 

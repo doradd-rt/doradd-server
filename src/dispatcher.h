@@ -13,21 +13,11 @@ extern "C"
 #include <rte_flow.h>
 }
 
-#define ROWS_PER_TX 10
-struct __attribute__((packed)) YCSBTransactionMarshalled
-{
-  uint32_t indices[ROWS_PER_TX];
-  uint16_t write_set;
-  uint64_t cown_ptrs[ROWS_PER_TX];
-  uint8_t  pad[6];
-};
-static_assert(sizeof(YCSBTransactionMarshalled) == 128);
-
 template<typename T>
 struct DoradBuf
 {
   uint64_t pkt_addr;
-  T workload;
+  typename T::Marshalled workload;
 };
 
 using namespace verona::cpp;
@@ -236,10 +226,11 @@ class RPCHandler
   {
     for (int i = 0; i < pkt_count; i++)
     {
-      // FIXME: Just keep the packet address for now
-      // Parsing should populate an app-specific transaction stuct, hence T
-      buffer[curr_idx++ & (BUFFER_SIZE - 1)].pkt_addr =
-        reinterpret_cast<uint64_t>(pkt_buff[i]);
+      uint64_t pktAddr = reinterpret_cast<uint64_t>(pkt_buff[i]);
+
+      buffer[curr_idx++ & (BUFFER_SIZE - 1)].pkt_addr = pktAddr;
+
+      T::parse_pkt(pktAddr);
 
       req_cnt.fetch_add(1, std::memory_order_relaxed);
     }
