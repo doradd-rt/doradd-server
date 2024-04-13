@@ -21,19 +21,18 @@ int main(int argc, char** argv)
 
   printf("There are %d cores\n", rte_lcore_count());
 
-  // One dispatcher core and the rest are for the runtime
   uint8_t worker_count = rte_lcore_count() - DISPATCHER_CORES;
 
   // The first worker_count cores will be the workers and the last
-  // DISPATCHER_CORES will be for the dispatcher
+  // DISPATCHER_CORES will be for the dispatcher 
   int lcore_id, count = 0;
   RTE_LCORE_FOREACH_WORKER(lcore_id)
   {
     if (++count < worker_count)
       continue;
-    std::cout << "The dispatcher will run on " << lcore_id << std::endl;
+    std::cout << "The rpc handler will run on " << lcore_id << std::endl;
     rte_eal_remote_launch(
-      Dispatcher<uint64_t>::main, reinterpret_cast<void*>(count), lcore_id);
+      RPCHandler<YCSBTransactionMarshalled>::main, reinterpret_cast<void*>(count), lcore_id);
     break;
   }
 
