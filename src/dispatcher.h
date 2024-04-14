@@ -92,49 +92,17 @@ class Indexer
     when() << [=]() {
       std::cout << "Will echo the packet back\n";
 
-      rte_ether_hdr* ethh = rte_pktmbuf_mtod(pkt, rte_ether_hdr*);
-      rte_ipv4_hdr* iph = reinterpret_cast<rte_ipv4_hdr*>(ethh + 1);
-      rte_udp_hdr* udph = reinterpret_cast<rte_udp_hdr*>(iph + 1);
-
-      uint32_t dst_ip = rte_be_to_cpu_32(iph->src_addr);
-
-      uint16_t payload_len =
-        rte_be_to_cpu_16(udph->dgram_len) - sizeof(rte_udp_hdr);
-      uint16_t overall_len = payload_len;
-
-      // switch src dst ports
-      udp_out_prepare(
-        udph,
-        rte_be_to_cpu_16(udph->dst_port),
-        rte_be_to_cpu_16(udph->src_port),
-        overall_len);
-      overall_len += sizeof(rte_udp_hdr);
-
-      ip_out_prepare(
-        iph,
-        local_ip,
-        rte_be_to_cpu_32(iph->src_addr),
-        64,
-        0,
-        IPPROTO_UDP,
-        overall_len);
-      overall_len += sizeof(rte_ipv4_hdr);
-
-      eth_out_prepare(ethh, RTE_ETHER_TYPE_IPV4, get_mac_addr(dst_ip));
-      overall_len += sizeof(rte_ether_hdr);
-
-      pkt->data_len = overall_len;
-      pkt->pkt_len = overall_len;
-      net_send_pkt(pkt);
+      reply_pkt(pkt);
     };
 
-    dispatch_idx++;
+    /* dispatch_idx++; */
   }
 
   void run()
   {
-    /* char* read_head = read_top; */
-    int i, ret = 0;
+    char* read_head = reinterpret_cast<char*>(global_buf);
+    char* prepare_read_head = read_head;
+    int i, ret, prepare_ret = 0;
     int batch = 0;
 
     while(1)
@@ -146,12 +114,19 @@ class Indexer
       /* } */
 
       batch = check_avail_cnts();
+    
+      for (i = 0; i < batch; i++)
+      {
+        prepare_ret = T::prepare_cowns(prepare_read_head);
+        prepare_read_head += prepare_ret;
+      }
 
       for (i = 0; i < batch; i++)
       {
-        /* ret = T::prepare_lowns(read_head); */
-        /* read_head += ret; */
-        dispatch();
+        /* dispatch(); */
+        ret = T::parse_and_process(read_head);
+        read_head += ret;
+        dispatch_idx++;
       }
       
       /* ring->push(batch); */

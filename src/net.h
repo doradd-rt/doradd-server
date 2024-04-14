@@ -42,6 +42,7 @@ static void get_local_mac(rte_ether_addr* dst);
 
 // Need to implement that
 void net_send_pkt(rte_mbuf* pkt);
+void reply_pkt(rte_mbuf* pkt);
 void udp_pkt_process(struct rte_mbuf* pkt);
 
 static inline void icmp_echo(struct rte_mbuf* pkt)

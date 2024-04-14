@@ -17,13 +17,13 @@ RTE_DEFINE_PER_LCORE(uint8_t, queue_id);
 // FIXME: should also be templated
 int workload_init()
 {
-  YCSBTransaction::index = new Index<YCSBRow>;
+  YCSBTransaction::table = new YCSBTable;
 
   /* uint64_t cown_prev_addr = 0; */
   /* uint8_t* cown_arr_addr = static_cast<uint8_t*>(aligned_alloc_hpage( */
   /*       1024 * DB_SIZE)); */
 
-  for (int i = 0; i < DB_SIZE; i++)
+  for (uint64_t i = 0; i < DB_SIZE; i++)
   {
     /* cown_ptr<YCSBRow> cown_r = make_cown_custom<YCSBRow>( */
     /*     reinterpret_cast<void *>(cown_arr_addr + (uint64_t)1024 * i)); */
@@ -34,7 +34,7 @@ int workload_init()
     
     cown_ptr<YCSBRow> cown_r = make_cown<YCSBRow>();
 
-    YCSBTransaction::index->insert_row(cown_r);
+    YCSBTransaction::table->insert_row(i, cown_r);
   }
 
   return 0;
