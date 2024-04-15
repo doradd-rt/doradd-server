@@ -30,5 +30,8 @@ find_package(PkgConfig REQUIRED)
 set(ENV{PKG_CONFIG_PATH} ${CMAKE_BINARY_DIR}/dpdk-install-dir/lib/aarch64-linux-gnu/pkgconfig)
 pkg_check_modules(LIBDPDK REQUIRED libdpdk)
 
+# SPSCQueue
+target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/../external/SPSCQueue/include/rigtorp)
+
 target_compile_options(server PRIVATE ${LIBDPDK_STATIC_CFLAGS})
 target_link_libraries(server ${LIBDPDK_STATIC_LDFLAGS})

@@ -7,3 +7,6 @@
 [submodule "external/snmalloc"]
 	path = external/snmalloc
 	url = https://github.com/microsoft/snmalloc.git
+[submodule "external/SPSCQueue"]
+	path = external/SPSCQueue
+	url = https://github.com/rigtorp/SPSCQueue.git
