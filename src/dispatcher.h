@@ -6,7 +6,7 @@
 #include <net.h>
 #include <verona.h>
 
-#include "spscq.h"
+#include "SPSCQueue.h"
 
 extern "C"
 {
@@ -28,9 +28,193 @@ extern uint8_t pkt_count;
 #define MAX_BATCH 8
 
 typedef std::tuple<std::atomic<uint64_t>*, uint64_t> PipelineArgs;
+typedef rigtorp::SPSCQueue<int> InterCore;
+
+typedef std::tuple<std::atomic<uint64_t>*, InterCore*, uint64_t> IndexerArgs;
+typedef std::tuple<InterCore*, InterCore*, uint64_t> PrefetcherArgs;
+typedef std::tuple<InterCore*, uint64_t> SpawnerArgs;
 
 template<typename T>
-class Indexer
+class BaseDispatcher
+{
+protected:
+  static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
+  uint32_t dispatch_idx, curr_idx;
+  DoradBuf<T>* global_buf;
+
+  BaseDispatcher(uint64_t global_buf_): dispatch_idx(0), curr_idx(0)
+  {
+    global_buf = reinterpret_cast<DoradBuf<T>*>(global_buf_);
+  }
+
+  virtual void run() = 0; 
+};
+
+template<typename T>
+class Indexer : BaseDispatcher<T>
+{
+  uint64_t handled_req_cnt;
+
+  // member fields for inter-core communication
+  std::atomic<uint64_t>* recvd_req_cnt;
+  InterCore* queue;
+
+  size_t check_avail_cnts()
+  {
+    uint64_t avail_cnt = 0;
+    size_t dyn_batch;
+
+    do {
+      uint64_t load_val = recvd_req_cnt->load(std::memory_order_relaxed);
+      avail_cnt = load_val - handled_req_cnt;
+      if (avail_cnt >= MAX_BATCH) 
+        dyn_batch = MAX_BATCH;
+      else if (avail_cnt > 0)
+        dyn_batch = static_cast<size_t>(avail_cnt);
+      else
+      {
+        _mm_pause();
+        continue;  
+      }
+    } while (avail_cnt == 0);
+
+    handled_req_cnt += dyn_batch;
+
+    return dyn_batch;
+  }
+
+  void run()
+  {
+    char* read_head = reinterpret_cast<char*>(BaseDispatcher<T>::global_buf);
+    int i, ret, batch, curr_idx = 0;
+
+    while(1)
+    {
+      batch = check_avail_cnts();
+
+      for (i = 0; i < batch; i++)
+      {
+        read_head = reinterpret_cast<char*>(
+          &BaseDispatcher<T>::global_buf[curr_idx++ & (BaseDispatcher<T>::BUFFER_SIZE - 1)]);
+        ret = T::prepare_cowns(read_head);
+      }
+
+      queue->push(batch);
+    }
+  }
+
+  Indexer(std::atomic<uint64_t>* req_cnt_, InterCore* queue_, uint64_t global_buf_) : 
+    BaseDispatcher<T>(global_buf_), handled_req_cnt(0), recvd_req_cnt(req_cnt_), queue(queue_) {}
+
+public:
+  static int main(void* args_ptr)
+  {
+    auto args = static_cast<IndexerArgs*>(args_ptr);
+
+    std::unique_ptr<IndexerArgs> thread_args_ptr(args);
+
+    Indexer indexer(std::get<0>(*args), std::get<1>(*args), std::get<2>(*args));
+    indexer.run();
+
+    return 0;
+  }
+};
+
+template<typename T>
+class Prefetcher: BaseDispatcher<T>
+{
+  // member fields for inter-core communication
+  InterCore* in_queue;
+  InterCore* out_queue;
+
+  void run()
+  {
+    char* read_head = reinterpret_cast<char*>(BaseDispatcher<T>::global_buf);
+    int i, ret, batch, curr_idx = 0;
+
+    while(1)
+    {
+      if (!in_queue->front())
+        continue;
+
+      batch = static_cast<int>(*in_queue->front());
+    
+      for (i = 0; i < batch; i++)
+      {
+        read_head = reinterpret_cast<char*>(
+          &BaseDispatcher<T>::global_buf[curr_idx++ & (BaseDispatcher<T>::BUFFER_SIZE - 1)]);
+        ret = T::prefetch_cowns(read_head);
+      }
+
+      out_queue->push(batch);
+      in_queue->pop();
+    }
+  }
+
+  Prefetcher(InterCore* in_queue_, InterCore* out_queue_, uint64_t global_buf_) : 
+     BaseDispatcher<T>(global_buf_), in_queue(in_queue_), out_queue(out_queue_) {}
+
+public:
+  static int main(void* args_ptr)
+  {
+    auto args = static_cast<PrefetcherArgs*>(args_ptr);
+
+    std::unique_ptr<PrefetcherArgs> thread_args_ptr(args);
+
+    Prefetcher prefetcher(std::get<0>(*args), std::get<1>(*args), std::get<2>(*args));
+    prefetcher.run();
+
+    return 0;
+  }
+};
+
+template<typename T>
+class Spawner: BaseDispatcher<T>
+{
+  InterCore* queue;
+
+  void run()
+  {
+    char* read_head = reinterpret_cast<char*>(BaseDispatcher<T>::global_buf);
+    int i, ret, batch, curr_idx = 0;
+
+    while(1)
+    {
+      if (!queue->front())
+        continue;
+
+      batch = static_cast<int>(*queue->front());
+    
+      for (i = 0; i < batch; i++)
+      {
+        read_head = reinterpret_cast<char*>(
+          &BaseDispatcher<T>::global_buf[curr_idx++ & (BaseDispatcher<T>::BUFFER_SIZE - 1)]);
+        ret = T::parse_and_process(read_head);
+      }
+
+      queue->pop();
+    }
+  }
+
+  Spawner(InterCore* queue_, uint64_t global_buf_) : 
+    BaseDispatcher<T>(global_buf_), queue(queue_) {}
+
+public:
+  static int main(void* args_ptr)
+  {
+    auto args = static_cast<SpawnerArgs*>(args_ptr);
+
+    std::unique_ptr<SpawnerArgs> thread_args_ptr(args);
+
+    Spawner spawner(std::get<0>(*args), std::get<1>(*args));
+    spawner.run();
+
+    return 0;
+  }
+};
+
+template<typename T>
+class TestOneDispatcher
 {
   static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
   /* uint32_t read_count; */
@@ -41,11 +225,11 @@ class Indexer
   uint64_t handled_req_cnt;
 
   // inter-thread comm w/ the prefetcher
-  /* rigtorp::SPSCQueue<int>* ring; */
+  /* rigtorp::SPSCQueue<int>* queue; */
 
-  /* Indexer(void* mmap_ret, rigtorp::SPSCQueue<int>* ring_ */
+  /* TestOneDispatcher(void* mmap_ret, rigtorp::SPSCQueue<int>* queue_ */
   /*   , std::atomic<uint64_t>* req_cnt_) : */
-  /*   read_top(reinterpret_cast<char*>(mmap_ret)), ring(ring_) */
+  /*   read_top(reinterpret_cast<char*>(mmap_ret)), queue(queue_) */
   /*   , recvd_req_cnt(req_cnt_) */
   /* { */
   /*   read_count = *(reinterpret_cast<uint32_t*>(read_top)); */
@@ -53,17 +237,17 @@ class Indexer
   /*   handled_req_cnt = 0; */
   /* } */
 
-  Indexer(std::atomic<uint64_t>* req_cnt_, uint64_t global_buf_): 
+  TestOneDispatcher(std::atomic<uint64_t>* req_cnt_, uint64_t global_buf_): 
     recvd_req_cnt(req_cnt_)
   {
     handled_req_cnt = 0;
     global_buf = reinterpret_cast<DoradBuf<T>*>(global_buf_);
   }
 
-  size_t check_avail_cnts()
+  int check_avail_cnts()
   {
     uint64_t avail_cnt;
-    size_t dyn_batch;
+    int dyn_batch;
 
     do {
       uint64_t load_val = recvd_req_cnt->load(std::memory_order_relaxed);
@@ -71,7 +255,7 @@ class Indexer
       if (avail_cnt >= MAX_BATCH) 
         dyn_batch = MAX_BATCH;
       else if (avail_cnt > 0)
-        dyn_batch = static_cast<size_t>(avail_cnt);
+        dyn_batch = static_cast<int>(avail_cnt);
       else
       {
         _mm_pause();
@@ -129,7 +313,7 @@ class Indexer
         dispatch_idx++;
       }
       
-      /* ring->push(batch); */
+      /* queue->push(batch); */
     }
   }
 
@@ -140,8 +324,8 @@ public:
 
     std::unique_ptr<PipelineArgs> thread_args_ptr(args);
 
-    Indexer indexer(std::get<0>(*args), std::get<1>(*args));
-    indexer.run();
+    TestOneDispatcher testOneDispatcher(std::get<0>(*args), std::get<1>(*args));
+    testOneDispatcher.run();
 
     return 0;
   }
@@ -151,12 +335,16 @@ template<typename T>
 class RPCHandler
 {
   static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
+  static const size_t CHANNEL_SIZE = 2;
 
   uint32_t curr_idx;
   uint32_t dispatch_idx;
   std::atomic<uint64_t> req_cnt;
 
   DoradBuf<T> buffer[BUFFER_SIZE];
+
+  InterCore channel_1{CHANNEL_SIZE}; 
+  InterCore channel_2{CHANNEL_SIZE}; 
 
   void configure_rx_queue()
   {
@@ -235,13 +423,31 @@ class RPCHandler
     bzero(pkt_buff, sizeof(pkt_buff));
     pkt_count = 0;
 
-    auto pipeline_args_ptr =
-      std::make_unique<PipelineArgs>(&req_cnt, reinterpret_cast<uint64_t>(buffer));
+    // launch dispatcher threads
 
-    int lcore_id = rte_lcore_id() + 1;
-    rte_eal_remote_launch(Indexer<T>::main, pipeline_args_ptr.release(), lcore_id);
-    
-    std::cout << "Creating next rpc handler thread on lcore " << lcore_id << std::endl;
+    /* auto pipeline_args_ptr = */
+    /*   std::make_unique<PipelineArgs>(&req_cnt, reinterpret_cast<uint64_t>(buffer)); */
+
+    /* int lcore_id = rte_lcore_id() + 1; */
+    /* rte_eal_remote_launch(TestOneDispatcher<T>::main, pipeline_args_ptr.release(), lcore_id); */
+
+    int lcore_id = rte_lcore_id();
+    auto buffer_addr = reinterpret_cast<uint64_t>(buffer);
+     
+    auto indexer_args_ptr =
+      std::make_unique<IndexerArgs>(&req_cnt, &channel_1, buffer_addr);
+    auto prefetcher_args_ptr =
+      std::make_unique<PrefetcherArgs>(&channel_1, &channel_2, buffer_addr);
+    auto spawner_args_ptr =
+      std::make_unique<SpawnerArgs>(&channel_2, buffer_addr);
+
+    rte_eal_remote_launch(Indexer<T>::main, indexer_args_ptr.release(), lcore_id + 1);
+    rte_eal_remote_launch(Prefetcher<T>::main, prefetcher_args_ptr.release(), lcore_id + 2);
+    rte_eal_remote_launch(Spawner<T>::main, spawner_args_ptr.release(), lcore_id + 3);
+
+    std::cout << "Creating Indexer thread on lcore " << lcore_id + 1 << std::endl;
+    std::cout << "Creating Prefetcher thread on lcore " << lcore_id + 2 << std::endl;
+    std::cout << "Creating Spawner thread on lcore " << lcore_id + 3 << std::endl;
   }
 
 public:
