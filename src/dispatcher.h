@@ -26,6 +26,7 @@ extern rte_mbuf* pkt_buff[DPDK_BATCH_SIZE];
 extern uint8_t pkt_count;
 
 #define MAX_BATCH 8
+static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
 
 typedef std::tuple<std::atomic<uint64_t>*, uint64_t> PipelineArgs;
 typedef rigtorp::SPSCQueue<int> InterCore;
@@ -38,11 +39,9 @@ template<typename T>
 class BaseDispatcher
 {
 protected:
-  static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
-  uint32_t dispatch_idx, curr_idx;
   DoradBuf<T>* global_buf;
 
-  BaseDispatcher(uint64_t global_buf_): dispatch_idx(0), curr_idx(0)
+  BaseDispatcher(uint64_t global_buf_)
   {
     global_buf = reinterpret_cast<DoradBuf<T>*>(global_buf_);
   }
@@ -95,7 +94,7 @@ class Indexer : BaseDispatcher<T>
       for (i = 0; i < batch; i++)
       {
         read_head = reinterpret_cast<char*>(
-          &BaseDispatcher<T>::global_buf[curr_idx++ & (BaseDispatcher<T>::BUFFER_SIZE - 1)]);
+          &BaseDispatcher<T>::global_buf[curr_idx++ & (BUFFER_SIZE - 1)]);
         ret = T::prepare_cowns(read_head);
       }
 
@@ -142,7 +141,7 @@ class Prefetcher: BaseDispatcher<T>
       for (i = 0; i < batch; i++)
       {
         read_head = reinterpret_cast<char*>(
-          &BaseDispatcher<T>::global_buf[curr_idx++ & (BaseDispatcher<T>::BUFFER_SIZE - 1)]);
+          &BaseDispatcher<T>::global_buf[curr_idx++ & (BUFFER_SIZE - 1)]);
         ret = T::prefetch_cowns(read_head);
       }
 
@@ -188,7 +187,7 @@ class Spawner: BaseDispatcher<T>
       for (i = 0; i < batch; i++)
       {
         read_head = reinterpret_cast<char*>(
-          &BaseDispatcher<T>::global_buf[curr_idx++ & (BaseDispatcher<T>::BUFFER_SIZE - 1)]);
+          &BaseDispatcher<T>::global_buf[curr_idx++ & (BUFFER_SIZE - 1)]);
         ret = T::parse_and_process(read_head);
       }
 
@@ -216,7 +215,6 @@ public:
 template<typename T>
 class TestOneDispatcher
 {
-  static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
   /* uint32_t read_count; */
   /* char* read_top; */
   uint32_t dispatch_idx = 0;
@@ -334,7 +332,6 @@ public:
 template<typename T>
 class RPCHandler
 {
-  static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
   static const size_t CHANNEL_SIZE = 2;
 
   uint32_t curr_idx;
