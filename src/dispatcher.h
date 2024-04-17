@@ -388,9 +388,12 @@ class RPCHandler
     {
       uint64_t pktAddr = reinterpret_cast<uint64_t>(pkt_buff[i]);
 
-      buffer[curr_idx++ & (BUFFER_SIZE - 1)].pkt_addr = pktAddr;
+      buffer[curr_idx & (BUFFER_SIZE - 1)].pkt_addr = pktAddr;
 
-      T::parse_pkt(pktAddr);
+      auto read_head = reinterpret_cast<char*>(
+          &buffer[curr_idx++ & (BUFFER_SIZE - 1)]);
+
+      T::parse_pkt(read_head);
 
       req_cnt.fetch_add(1, std::memory_order_relaxed);
     }

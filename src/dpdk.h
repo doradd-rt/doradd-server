@@ -81,7 +81,7 @@ struct DPDKManager
 
     printf("I found %" PRIu8 " ports\n", nb_ports);
 
-    /* 1 RX queue. N-1 TX queues for each  worker */
+    /* 1 RX queue. N-1 TX queues for each worker */
     nb_rx_q = rte_lcore_count() - DISPATCHER_CORES + 1;
     nb_tx_q = nb_rx_q;
 

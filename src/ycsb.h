@@ -3,11 +3,11 @@
 
 #include "db.h" 
 #include "dispatcher.h"
-/* #include "pipeline.hpp" */
+
 static constexpr uint32_t ROWS_PER_TX = 10;
 static constexpr uint32_t ROW_SIZE = 900;
 static constexpr uint32_t WRITE_SIZE = 100;
-static constexpr uint64_t DB_SIZE = 100;
+static constexpr uint64_t DB_SIZE = 10'000'000;
 
 struct YCSBRow
 {
@@ -63,11 +63,23 @@ public:
   };
   static_assert(sizeof(Marshalled) == 128);
  
-  static void parse_pkt(uint64_t pkt_addr)
+  static void parse_pkt(char* input)
   {
-    auto pkt = reinterpret_cast<rte_mbuf*>(pkt_addr);
-    
-    // FIXME: add more logic here to populate the txns
+    auto txm = reinterpret_cast<DoradBuf<YCSBTransaction>*>(input);
+    auto pkt = reinterpret_cast<rte_mbuf*>(txm->pkt_addr);
+
+    Marshalled* payload = reinterpret_cast<Marshalled *>(
+      reinterpret_cast<uint8_t*>(rte_pktmbuf_mtod(pkt, rte_ether_hdr*)) +
+      sizeof(rte_ether_hdr) +
+      sizeof(rte_ipv4_hdr) +
+      sizeof(rte_udp_hdr) + 
+      sizeof(custom_rpc_header)
+    );
+
+    for (int i = 0; i < ROWS_PER_TX; i++)
+      txm->workload.indices[i] = payload->indices[i];
+
+    txm->workload.write_set = payload->write_set; 
   }
 
   static int prepare_cowns(char* input)
@@ -76,8 +88,7 @@ public:
 
     for (int i = 0; i < ROWS_PER_TX; i++)
     {
-      //auto&& cown = table->get_row(txm->workload.indices[i]);
-      auto&& cown = table->get_row(i); // FIXME: hardcode for testing here
+      auto&& cown = table->get_row(txm->workload.indices[i]);
       txm->workload.cown_ptrs[i] = cown.get_base_addr();
     }
 

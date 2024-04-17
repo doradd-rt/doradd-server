@@ -27,7 +27,8 @@ target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR})
 # DPDK related
 # Link DPDK
 find_package(PkgConfig REQUIRED)
-set(ENV{PKG_CONFIG_PATH} ${CMAKE_BINARY_DIR}/dpdk-install-dir/lib/aarch64-linux-gnu/pkgconfig)
+# set(ENV{PKG_CONFIG_PATH} ${CMAKE_BINARY_DIR}/dpdk-install-dir/lib/aarch64-linux-gnu/pkgconfig)
+set(ENV{PKG_CONFIG_PATH} ${CMAKE_SOURCE_DIR}/../build/dpdk-install-dir/lib/x86_64-linux-gnu/pkgconfig)
 pkg_check_modules(LIBDPDK REQUIRED libdpdk)
 
 # SPSCQueue
