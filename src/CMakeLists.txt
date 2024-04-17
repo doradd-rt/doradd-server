@@ -8,6 +8,11 @@ add_executable(server main.cc net.cc)
 
 target_compile_options(server PRIVATE -Wno-narrowing)
 
+if(CMAKE_BUILD_TYPE MATCHES Release)
+  set(BRANCH "release")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+endif()
+
 # This is the correct way to link
 #ExternalProject_Add(verona-rt
 #  SOURCE_DIR ${CMAKE_SOURCE_DIR}/../external/verona-rt

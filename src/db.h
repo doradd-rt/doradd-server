@@ -4,6 +4,8 @@
 #include <optional>
 #include <cpp/when.h>
 
+#include "hugepage.h"
+
 using namespace verona::rt;
 using namespace verona::cpp;
 

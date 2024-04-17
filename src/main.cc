@@ -14,30 +14,9 @@ using namespace verona::cpp;
 struct rte_mempool* pktmbuf_pool;
 RTE_DEFINE_PER_LCORE(uint8_t, queue_id);
 
-// FIXME: should also be templated
 int workload_init()
 {
-  YCSBTransaction::table = new YCSBTable;
-
-  /* uint64_t cown_prev_addr = 0; */
-  /* uint8_t* cown_arr_addr = static_cast<uint8_t*>(aligned_alloc_hpage( */
-  /*       1024 * DB_SIZE)); */
-
-  for (uint64_t i = 0; i < DB_SIZE; i++)
-  {
-    /* cown_ptr<YCSBRow> cown_r = make_cown_custom<YCSBRow>( */
-    /*     reinterpret_cast<void *>(cown_arr_addr + (uint64_t)1024 * i)); */
-
-    /* if (i > 0) */
-    /*   assert((cown_r.get_base_addr() - cown_prev_addr) == 1024); */
-    /* cown_prev_addr = cown_r.get_base_addr(); */
-    
-    cown_ptr<YCSBRow> cown_r = make_cown<YCSBRow>();
-
-    YCSBTransaction::table->insert_row(i, cown_r);
-  }
-
-  return 0;
+  return YCSB::init();
 }
 
 int main(int argc, char** argv)

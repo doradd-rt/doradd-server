@@ -21,6 +21,14 @@ public:
   }
 };
 
+long time_ns()
+{
+	struct timespec ts;
+	int r = clock_gettime(CLOCK_MONOTONIC, &ts);
+	assert(r == 0);
+	return (ts.tv_nsec + ts.tv_sec * 1e9);
+}
+
 #define GET_COWN(_INDEX) auto&& row##_INDEX = get_cown_ptr_from_addr<YCSBRow>(reinterpret_cast<void *>(txm->workload.cown_ptrs[_INDEX]));
 #define TXN(_INDEX) \
 { \
@@ -33,21 +41,11 @@ public:
   } \
   write_set_l >>= 1; \
 }
-/* #define M_LOG_LATENCY() \ */
-/*   { \ */
-/*     if constexpr (LOG_LATENCY) { \ */
-/*       auto time_now = std::chrono::system_clock::now(); \ */
-/*       std::chrono::duration<double> duration = time_now - init_time; \ */
-/*       uint32_t log_duration = static_cast<uint32_t>(duration.count() * 1'000'000); \ */
-/*       TxCounter::instance().log_latency(log_duration); \ */
-/*     } \ */
-/*     TxCounter::instance().incr(); \ */
-/*   } */
-/* #define SPIN_RUN() \ */
-/*   { \ */
-/*     long next_ts = time_ns() + 100'000; \ */
-/*     while (time_ns() < next_ts) _mm_pause(); \ */
-/*   } \ */
+#define SPIN_RUN() \
+  { \
+    long next_ts = time_ns() + 10'000; \
+    while (time_ns() < next_ts) _mm_pause(); \
+  } \
 
 class YCSBTransaction
 {
@@ -128,15 +126,35 @@ public:
       int j;
       TXN(0);TXN(1);TXN(2);TXN(3);TXN(4);TXN(5);TXN(6);TXN(7);TXN(8);TXN(9);
       /* SPIN_RUN(); */
-      /* M_LOG_LATENCY(); */
       
       rte_mbuf* pkt = reinterpret_cast<rte_mbuf*>(pkt_addr);
       reply_pkt(pkt);
     };
     return sizeof(DoradBuf<YCSBTransaction>);
   }
+
   YCSBTransaction(const YCSBTransaction&) = delete;
   YCSBTransaction& operator=(const YCSBTransaction&) = delete;
 };
-
+  
 YCSBTable* YCSBTransaction::table;
+
+namespace YCSB {
+int init()
+{
+  YCSBTransaction::table = new YCSBTable;
+
+  uint8_t* cown_arr_addr = static_cast<uint8_t*>(aligned_alloc_hpage(
+    1024 * DB_SIZE));
+
+  for (uint64_t i = 0; i < DB_SIZE; i++)
+  {
+    cown_ptr<YCSBRow> cown_r = make_cown_custom<YCSBRow>(
+        reinterpret_cast<void *>(cown_arr_addr + (uint64_t)1024 * i));
+
+    YCSBTransaction::table->insert_row(i, cown_r);
+  }
+
+  return 0;
+}
+}
