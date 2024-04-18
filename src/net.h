@@ -135,6 +135,7 @@ static inline void ip_in(struct rte_mbuf* pkt)
   return;
 
 out:
+  printf("Wrong msg: %u, %u\n", rte_be_to_cpu_32(iph->dst_addr),rte_be_to_cpu_32(iph->src_addr));
   fprintf(stderr, "UNKNOWN L3 PROTOCOL OR WRONG DST IP\n");
   rte_pktmbuf_free(pkt);
 }
@@ -265,9 +266,9 @@ static inline void udp_out_prepare(
 static inline void get_local_mac(rte_ether_addr* dst)
 {
   // This does not work with the TAP device
-  // rte_eth_macaddr_get(0, &ethh->src_addr);
-  char local_mac[] = {0xde, 0xad, 0xbe, 0xef, 0x5e, 0xb1};
-  memcpy(dst, local_mac, 6);
+  rte_eth_macaddr_get(0, dst);
+  //char local_mac[] = {0xde, 0xad, 0xbe, 0xef, 0x5e, 0xb1};
+  //memcpy(dst, local_mac, 6);
 }
 
 static inline uint32_t ip_str_to_int(const char* ip)

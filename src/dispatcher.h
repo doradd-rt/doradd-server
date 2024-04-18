@@ -26,7 +26,7 @@ extern rte_mbuf* pkt_buff[DPDK_BATCH_SIZE];
 extern uint8_t pkt_count;
 
 #define MAX_BATCH 8
-static const uint32_t BUFFER_SIZE = 512; // should be a power of 2
+static const uint32_t BUFFER_SIZE = 512 * 64; // should be a power of 2
 
 typedef std::tuple<std::atomic<uint64_t>*, uint64_t> PipelineArgs;
 typedef rigtorp::SPSCQueue<int> InterCore;

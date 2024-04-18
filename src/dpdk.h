@@ -40,13 +40,16 @@ struct DPDKManager
         {
           .mq_mode = RTE_ETH_MQ_RX_RSS,
           // FIXME: Enable offloads when running on the device
-          //.mtu = RTE_ETHER_MAX_LEN,
-          //.offloads = RTE_ETH_RX_OFFLOAD_IPV4_CKSUM |
-          // RTE_ETH_RX_OFFLOAD_UDP_CKSUM | RTE_ETH_RX_OFFLOAD_KEEP_CRC,
+          .mtu = RTE_ETHER_MAX_LEN,
+          .offloads = RTE_ETH_RX_OFFLOAD_CHECKSUM 
+            //| RTE_ETH_RX_OFFLOAD_TIMESTAMP
         },
       .txmode =
         {
           .mq_mode = RTE_ETH_MQ_TX_NONE,
+          .offloads = RTE_ETH_TX_OFFLOAD_UDP_CKSUM 
+            | RTE_ETH_TX_OFFLOAD_IPV4_CKSUM 
+            | RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE
         },
       .rx_adv_conf =
         {

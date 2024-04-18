@@ -120,7 +120,7 @@ public:
        AcqType acq_row4, AcqType acq_row5, AcqType acq_row6, AcqType acq_row7,
        AcqType acq_row8, AcqType acq_row9)
     {
-      std::cout << "hello inside when closure" << std::endl;
+      /* std::cout << "hello inside when closure" << std::endl; */
       uint8_t sum = 0;
       uint16_t write_set_l = ws_cap;
       int j;
