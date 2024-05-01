@@ -1,37 +1,30 @@
 #pragma once
 
-#include <unordered_map>
 #include <optional>
-#include <cpp/when.h>
 
 #include "hugepage.h"
-
-using namespace verona::rt;
-using namespace verona::cpp;
 
 template<typename Key, typename T, uint64_t DB_SIZE>
 struct Table
 {
 private:
-  std::array<cown_ptr<T>, DB_SIZE> map;
+  std::array<T, DB_SIZE> map;
   uint64_t cnt = 0;
 
 public:
-  void * start_addr = 0;
+  Table() : map(std::array<T, DB_SIZE>()) {}
 
-  Table() : map(std::array<cown_ptr<T>, DB_SIZE>()) {}
-
-  cown_ptr<T>* get_row_addr(uint64_t key)
+  T* get_row_addr(uint64_t key)
   {
     return &map[key];
   }
 
-  cown_ptr<T>&& get_row(uint64_t key)
+  T&& get_row(uint64_t key)
   {
     return std::move(map[key]);
   }
 
-  uint64_t insert_row(Key key, cown_ptr<T> r)
+  uint64_t insert_row(Key key, T r)
   {
     if (cnt < DB_SIZE)
     {

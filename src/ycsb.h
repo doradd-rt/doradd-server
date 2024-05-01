@@ -2,21 +2,19 @@
 #include <unordered_map>
 
 #include "db.h" 
+#include "non-deter/spinlock.h"
 #include "dispatcher.h"
+#include "generic_macros.hpp"
 
 static constexpr uint32_t ROWS_PER_TX = 10;
 static constexpr uint32_t ROW_SIZE = 900;
 static constexpr uint32_t WRITE_SIZE = 100;
 static constexpr uint64_t DB_SIZE = 10'000'000;
+static constexpr long SPIN_TIME = 5'000;
 
-struct YCSBRow
-{
-  char payload[ROW_SIZE];
-};
-
-class YCSBTable : public Table<uint64_t, YCSBRow, DB_SIZE> {
+class YCSBTable : public Table<uint64_t, spinlock*, DB_SIZE> {
 public:
-  YCSBTable() : Table<uint64_t, YCSBRow, DB_SIZE> () {
+  YCSBTable() : Table<uint64_t, spinlock*, DB_SIZE> () {
     printf("YCSB tbl size: %lu\n", DB_SIZE);
   }
 };
@@ -29,23 +27,30 @@ long time_ns()
 	return (ts.tv_nsec + ts.tv_sec * 1e9);
 }
 
-#define GET_COWN(_INDEX) auto&& row##_INDEX = get_cown_ptr_from_addr<YCSBRow>(reinterpret_cast<void *>(txm->workload.cown_ptrs[_INDEX]));
-#define TXN(_INDEX) \
-{ \
-  if (write_set_l & 0x1) \
-    memset(acq_row##_INDEX->payload, sum, WRITE_SIZE); \
-  else \
+#define GET_COWN_ADDR(i, _) uint32_t a##i = txm->workload.indices[i];
+#define GET_COWN(j, _) \
   { \
-    for (int j = 0; j < ROW_SIZE; j++) \
-      sum += acq_row##_INDEX->payload[j]; \
-  } \
-  write_set_l >>= 1; \
+  spinlock* p##j = table->get_row(vec[j]); \
+  lock_vec.push_back(p##j); \
 }
+
 #define SPIN_RUN() \
   { \
-    long next_ts = time_ns() + 10'000; \
+    long next_ts = time_ns() + SPIN_TIME; \
     while (time_ns() < next_ts) _mm_pause(); \
   } \
+
+#define PUSH_VEC(i, _) vec.push_back(a##i);
+
+#define VEC_INIT() \
+    std::vector<uint64_t> vec; \
+    std::vector<spinlock*> lock_vec; \
+    vec.reserve(ROWS_PER_TX); lock_vec.reserve(ROWS_PER_TX); \
+    std::sort(vec.begin(), vec.end()); \
+
+#define VEC_SORT() std::sort(vec.begin(), vec.end());
+#define BODY_START() for (int j = 0; j < ROWS_PER_TX; j++) { lock_vec[j]->lock(); }
+#define BODY_END() for (int j = ROWS_PER_TX - 1; j >= 0; j--) { lock_vec[j]->unlock(); }
 
 class YCSBTransaction
 {
@@ -56,7 +61,7 @@ public:
   {
     uint32_t indices[ROWS_PER_TX];
     uint16_t write_set;
-    uint64_t cown_ptrs[ROWS_PER_TX];
+    uint64_t lown_ptrs[ROWS_PER_TX];
     uint8_t  pad[6];
   };
   static_assert(sizeof(Marshalled) == 128);
@@ -86,8 +91,8 @@ public:
 
     for (int i = 0; i < ROWS_PER_TX; i++)
     {
-      auto&& cown = table->get_row(txm->workload.indices[i]);
-      txm->workload.cown_ptrs[i] = cown.get_base_addr();
+      auto&& lown = table->get_row(txm->workload.indices[i]);
+      //txm->workload.lown_ptrs[i] = lown.get_base_addr();
     }
 
     return sizeof(DoradBuf<YCSBTransaction>);
@@ -97,9 +102,9 @@ public:
   {
     auto txm = reinterpret_cast<const DoradBuf<YCSBTransaction>*>(input);
 
-    for (int i = 0; i < ROWS_PER_TX; i++)
-      __builtin_prefetch(reinterpret_cast<const void *>(
-        txm->workload.cown_ptrs[i]), 1, 3);
+    //for (int i = 0; i < ROWS_PER_TX; i++)
+    //  __builtin_prefetch(reinterpret_cast<const void *>(
+    //    txm->workload.lown_ptrs[i]), 1, 3);
     
     return sizeof(DoradBuf<YCSBTransaction>);
   }
@@ -111,22 +116,17 @@ public:
     auto ws_cap = txm->workload.write_set;
     auto pkt_addr = txm->pkt_addr;
 
-    GET_COWN(0);GET_COWN(1);GET_COWN(2);GET_COWN(3);GET_COWN(4);
-    GET_COWN(5);GET_COWN(6);GET_COWN(7);GET_COWN(8);GET_COWN(9);
-
-    using AcqType = acquired_cown<YCSBRow>;
-    when(row0,row1,row2,row3,row4,row5,row6,row7,row8,row9) << [ws_cap, pkt_addr]
-      (AcqType acq_row0, AcqType acq_row1, AcqType acq_row2, AcqType acq_row3, 
-       AcqType acq_row4, AcqType acq_row5, AcqType acq_row6, AcqType acq_row7,
-       AcqType acq_row8, AcqType acq_row9)
+    EVAL(REPEAT(10, GET_COWN_ADDR, ~))
+    when() << [ws_cap, pkt_addr, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]()
     {
-      /* std::cout << "hello inside when closure" << std::endl; */
+      VEC_INIT(); EVAL(REPEAT(10, PUSH_VEC, ~)) VEC_SORT();
+      EVAL(REPEAT(10, GET_COWN, ~))
+      BODY_START();
       uint8_t sum = 0;
       uint16_t write_set_l = ws_cap;
       int j;
-      TXN(0);TXN(1);TXN(2);TXN(3);TXN(4);TXN(5);TXN(6);TXN(7);TXN(8);TXN(9);
-      /* SPIN_RUN(); */
-      
+      SPIN_RUN();
+      BODY_END();
       rte_mbuf* pkt = reinterpret_cast<rte_mbuf*>(pkt_addr);
       reply_pkt(pkt);
     };
@@ -144,15 +144,10 @@ int init()
 {
   YCSBTransaction::table = new YCSBTable;
 
-  uint8_t* cown_arr_addr = static_cast<uint8_t*>(aligned_alloc_hpage(
-    1024 * DB_SIZE));
-
   for (uint64_t i = 0; i < DB_SIZE; i++)
   {
-    cown_ptr<YCSBRow> cown_r = make_cown_custom<YCSBRow>(
-        reinterpret_cast<void *>(cown_arr_addr + (uint64_t)1024 * i));
-
-    YCSBTransaction::table->insert_row(i, cown_r);
+    spinlock* splock_ptr = new spinlock;
+    YCSBTransaction::table->insert_row(i, splock_ptr);
   }
 
   return 0;
