@@ -27,10 +27,10 @@ long time_ns()
 	return (ts.tv_nsec + ts.tv_sec * 1e9);
 }
 
-#define GET_COWN_ADDR(i, _) uint32_t a##i = txm->workload.indices[i];
-#define GET_COWN(j, _) \
+#define GET_LOCK_ADDR(i, _) uint64_t a##i = txm->workload.lown_ptrs[i];
+#define GET_LOCK(j, _) \
   { \
-  spinlock* p##j = table->get_row(vec[j]); \
+  spinlock* p##j = reinterpret_cast<spinlock*>(vec[j]); \
   lock_vec.push_back(p##j); \
 }
 
@@ -51,6 +51,10 @@ long time_ns()
 #define VEC_SORT() std::sort(vec.begin(), vec.end());
 #define BODY_START() for (int j = 0; j < ROWS_PER_TX; j++) { lock_vec[j]->lock(); }
 #define BODY_END() for (int j = ROWS_PER_TX - 1; j >= 0; j--) { lock_vec[j]->unlock(); }
+
+#define PREFETCH() \
+    for (int i = 0; i < ROWS_PER_TX; i++) \
+      __builtin_prefetch(reinterpret_cast<const void *>(vec[i]), 1, 3); \
 
 class YCSBTransaction
 {
@@ -92,7 +96,7 @@ public:
     for (int i = 0; i < ROWS_PER_TX; i++)
     {
       auto&& lown = table->get_row(txm->workload.indices[i]);
-      //txm->workload.lown_ptrs[i] = lown.get_base_addr();
+      txm->workload.lown_ptrs[i] = reinterpret_cast<uint64_t>(lown);
     }
 
     return sizeof(DoradBuf<YCSBTransaction>);
@@ -102,9 +106,9 @@ public:
   {
     auto txm = reinterpret_cast<const DoradBuf<YCSBTransaction>*>(input);
 
-    //for (int i = 0; i < ROWS_PER_TX; i++)
-    //  __builtin_prefetch(reinterpret_cast<const void *>(
-    //    txm->workload.lown_ptrs[i]), 1, 3);
+    for (int i = 0; i < ROWS_PER_TX; i++)
+      __builtin_prefetch(reinterpret_cast<const void *>(
+        txm->workload.lown_ptrs[i]), 1, 3);
     
     return sizeof(DoradBuf<YCSBTransaction>);
   }
@@ -116,11 +120,12 @@ public:
     auto ws_cap = txm->workload.write_set;
     auto pkt_addr = txm->pkt_addr;
 
-    EVAL(REPEAT(10, GET_COWN_ADDR, ~))
+    EVAL(REPEAT(10, GET_LOCK_ADDR, ~))
     when() << [ws_cap, pkt_addr, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]()
     {
       VEC_INIT(); EVAL(REPEAT(10, PUSH_VEC, ~)) VEC_SORT();
-      EVAL(REPEAT(10, GET_COWN, ~))
+      EVAL(REPEAT(10, GET_LOCK, ~))
+      PREFETCH();
       BODY_START();
       uint8_t sum = 0;
       uint16_t write_set_l = ws_cap;
