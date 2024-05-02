@@ -8,6 +8,7 @@ static constexpr uint32_t ROWS_PER_TX = 10;
 static constexpr uint32_t ROW_SIZE = 900;
 static constexpr uint32_t WRITE_SIZE = 100;
 static constexpr uint64_t DB_SIZE = 10'000'000;
+static constexpr long SPIN_TIME = 100'000;
 
 struct YCSBRow
 {
@@ -43,7 +44,7 @@ long time_ns()
 }
 #define SPIN_RUN() \
   { \
-    long next_ts = time_ns() + 10'000; \
+    long next_ts = time_ns() + SPIN_TIME; \
     while (time_ns() < next_ts) _mm_pause(); \
   } \
 
@@ -124,8 +125,8 @@ public:
       uint8_t sum = 0;
       uint16_t write_set_l = ws_cap;
       int j;
-      TXN(0);TXN(1);TXN(2);TXN(3);TXN(4);TXN(5);TXN(6);TXN(7);TXN(8);TXN(9);
-      /* SPIN_RUN(); */
+      /* TXN(0);TXN(1);TXN(2);TXN(3);TXN(4);TXN(5);TXN(6);TXN(7);TXN(8);TXN(9); */
+      SPIN_RUN();
       
       rte_mbuf* pkt = reinterpret_cast<rte_mbuf*>(pkt_addr);
       reply_pkt(pkt);
