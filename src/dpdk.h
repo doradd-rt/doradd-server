@@ -28,7 +28,7 @@ struct DPDKManager
   static void dpdk_init(int* argc, char*** argv)
   {
     int ret, nb_ports, i;
-    uint8_t port_id = 0;
+    uint8_t port_id = PORT_ID;
     uint16_t nb_rx_q;
     uint16_t nb_tx_q;
     uint16_t nb_tx_desc = ETH_DEV_TX_QUEUE_SZ;
@@ -146,7 +146,7 @@ struct DPDKManager
 
   static void dpdk_terminate(void)
   {
-    int8_t port_id = 0;
+    int8_t port_id = PORT_ID;
 
     printf("Closing port %d...", port_id);
     rte_eth_dev_stop(port_id);
@@ -159,7 +159,7 @@ struct DPDKManager
     struct rte_mbuf* rx_pkts[DPDK_BATCH_SIZE];
 
     ret =
-      rte_eth_rx_burst(0, RTE_PER_LCORE(queue_id), rx_pkts, DPDK_BATCH_SIZE);
+      rte_eth_rx_burst(PORT_ID, RTE_PER_LCORE(queue_id), rx_pkts, DPDK_BATCH_SIZE);
     if (!ret)
       return;
 
@@ -173,7 +173,7 @@ struct DPDKManager
 
     while (1)
     {
-      ret = rte_eth_tx_burst(0, RTE_PER_LCORE(queue_id), &pkt, 1);
+      ret = rte_eth_tx_burst(PORT_ID, RTE_PER_LCORE(queue_id), &pkt, 1);
       if (ret == 1)
         break;
     }
