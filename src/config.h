@@ -9,3 +9,4 @@
 #define ARP_ENTRIES_COUNT 6
 #define MAX_PKT_SIZE 1500
 #define DISPATCHER_CORES 4 
+#define PORT_ID 0
