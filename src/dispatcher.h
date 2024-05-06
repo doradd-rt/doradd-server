@@ -372,13 +372,13 @@ class RPCHandler
     actions[0].conf = &queue;
     actions[1].type = RTE_FLOW_ACTION_TYPE_END;
 
-    ret = rte_flow_validate(0, &attr, pattern, actions, &err);
+    ret = rte_flow_validate(PORT_ID, &attr, pattern, actions, &err);
     if (ret)
     {
       std::cout << "Error creating flow : " << err.message << std::endl;
       return;
     }
-    f = rte_flow_create(0, &attr, pattern, actions, &err);
+    f = rte_flow_create(PORT_ID, &attr, pattern, actions, &err);
     assert(f);
   }
 
