@@ -35,11 +35,6 @@ typedef std::tuple<std::atomic<uint64_t>*, InterCore*, uint64_t> IndexerArgs;
 typedef std::tuple<InterCore*, InterCore*, uint64_t> PrefetcherArgs;
 typedef std::tuple<InterCore*, uint64_t> SpawnerArgs;
 
-// for bitmap
-uint16_t set_nth_bit(uint16_t value, int n) {
-  return value | ((uint16_t)1 << n);
-}
-
 template<typename T>
 class BaseDispatcher
 {
@@ -480,8 +475,6 @@ class RPCHandler
 
       // Parse a batch of received pkts
       parse_pkts();
-      if (!pkt_bitmap)
-        break;
 
       index_lookup();
 
