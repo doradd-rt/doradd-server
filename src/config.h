@@ -9,3 +9,9 @@
 #define ARP_ENTRIES_COUNT 6
 #define MAX_PKT_SIZE 1500
 #define DISPATCHER_CORES 4 
+
+#define CLIENT_ID 1
+#define BACKUP_ID 3
+#define CLIENT_IP 0x0a0a0101
+#define BACKUP_IP 0x0a0a0103
+#define BACKUP_UDP_PORT 8081

@@ -390,13 +390,27 @@ class RPCHandler
   {
     for (int i = 0; i < pkt_count; i++)
     {
-      uint64_t pktAddr = reinterpret_cast<uint64_t>(pkt_buff[i]);
-
-      buffer[curr_idx & (BUFFER_SIZE - 1)].pkt_addr = pktAddr;
-
-      GET_READ_HEAD();
-
-      T::parse_pkt(read_head);
+      rte_ether_hdr* ethh = rte_pktmbuf_mtod(pkt_buff[i], rte_ether_hdr*);
+      rte_ipv4_hdr* iph = reinterpret_cast<rte_ipv4_hdr*>(ethh + 1);
+      uint32_t src_ip  = rte_be_to_cpu_32(iph->src_addr);
+      uint32_t idx = (src_ip & 0xff) - 1;
+ 
+      // if src ip is client, forward it to backup
+      // if src ip is backup, schedule, exec, and send back to client
+      switch(idx) {
+        case CLIENT_ID:
+          fw_to_backup(pkt_buff[i]);
+          break;
+        case BACKUP_ID:
+          // TODO: change mac/ip/udp, consider not using reply_pkt API
+          uint64_t pktAddr = reinterpret_cast<uint64_t>(pkt_buff[i]);
+          buffer[curr_idx & (BUFFER_SIZE - 1)].pkt_addr = pktAddr;
+          GET_READ_HEAD();
+          T::parse_pkt(read_head);
+          break;
+        default:
+          printf("Wrong src ip\n");
+      }
     }
   }
 
