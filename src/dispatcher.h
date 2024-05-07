@@ -35,6 +35,11 @@ typedef std::tuple<std::atomic<uint64_t>*, InterCore*, uint64_t> IndexerArgs;
 typedef std::tuple<InterCore*, InterCore*, uint64_t> PrefetcherArgs;
 typedef std::tuple<InterCore*, uint64_t> SpawnerArgs;
 
+// for bitmap
+uint16_t set_nth_bit(uint16_t value, int n) {
+  return value | ((uint16_t)1 << n);
+}
+
 template<typename T>
 class BaseDispatcher
 {
@@ -332,12 +337,12 @@ public:
 #define GET_READ_HEAD() \
   auto read_head = reinterpret_cast<char*>(&buffer[curr_idx++ & (BUFFER_SIZE - 1)]); \
 
-
 template<typename T>
 class RPCHandler
 {
   static const size_t CHANNEL_SIZE = 2;
 
+  uint16_t pkt_bitmap; // given DPDK_BATCH_SIZE is 8
   uint32_t curr_idx;
   uint32_t dispatch_idx;
   std::atomic<uint64_t> req_cnt;
@@ -393,20 +398,24 @@ class RPCHandler
       rte_ether_hdr* ethh = rte_pktmbuf_mtod(pkt_buff[i], rte_ether_hdr*);
       rte_ipv4_hdr* iph = reinterpret_cast<rte_ipv4_hdr*>(ethh + 1);
       uint32_t src_ip  = rte_be_to_cpu_32(iph->src_addr);
-      uint32_t idx = (src_ip & 0xff) - 1;
+      uint32_t idx = src_ip & 0xff;
  
       // if src ip is client, forward it to backup
       // if src ip is backup, schedule, exec, and send back to client
       switch(idx) {
         case CLIENT_ID:
-          fw_to_backup(pkt_buff[i]);
+          { 
+            fw_to_backup(pkt_buff[i]);
+          }
           break;
         case BACKUP_ID:
-          // TODO: change mac/ip/udp, consider not using reply_pkt API
-          uint64_t pktAddr = reinterpret_cast<uint64_t>(pkt_buff[i]);
-          buffer[curr_idx & (BUFFER_SIZE - 1)].pkt_addr = pktAddr;
-          GET_READ_HEAD();
-          T::parse_pkt(read_head);
+          {
+            uint64_t pktAddr = reinterpret_cast<uint64_t>(pkt_buff[i]);
+            buffer[curr_idx & (BUFFER_SIZE - 1)].pkt_addr = pktAddr;
+            GET_READ_HEAD();
+            T::parse_pkt(read_head);
+            pkt_bitmap |= ((uint16_t)1 << i);
+          }
           break;
         default:
           printf("Wrong src ip\n");
@@ -417,9 +426,13 @@ class RPCHandler
   void index_lookup()
   {
     curr_idx -= pkt_count;
+    uint16_t bitmap = pkt_bitmap;
     int ret;
     for (int i = 0; i < pkt_count; i++)
     {
+      if (!(bitmap && (1 << i)))
+         break;
+
       GET_READ_HEAD();
       ret = T::prepare_cowns(read_head);
     }
@@ -428,9 +441,13 @@ class RPCHandler
   void prefetch()
   {
     curr_idx -= pkt_count;
+    uint16_t bitmap = pkt_bitmap;
     int ret;
     for (int i = 0; i < pkt_count; i++)
     {
+      if (!(bitmap && (1 << i)))
+         break;
+
       GET_READ_HEAD();
       ret = T::prefetch_cowns(read_head);
     }
@@ -439,9 +456,13 @@ class RPCHandler
   void dispatch()
   {
     curr_idx -= pkt_count;
+    uint16_t bitmap = pkt_bitmap;
     int ret;
     for (int i = 0; i < pkt_count; i++)
     {
+      if (!(bitmap && (1 << i)))
+         break;
+
       GET_READ_HEAD();
       ret = T::parse_and_process(read_head);
     }
@@ -459,6 +480,8 @@ class RPCHandler
 
       // Parse a batch of received pkts
       parse_pkts();
+      if (!pkt_bitmap)
+        break;
 
       index_lookup();
 
@@ -467,6 +490,7 @@ class RPCHandler
       dispatch();  
       
       pkt_count = 0;
+      pkt_bitmap = 0;
    }
 
     return 0;
@@ -476,6 +500,7 @@ class RPCHandler
   {
     bzero(pkt_buff, sizeof(pkt_buff));
     pkt_count = 0;
+    pkt_bitmap = 0;
 
     // launch dispatcher threads
 
