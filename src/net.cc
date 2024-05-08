@@ -59,10 +59,12 @@ void reply_pkt(rte_mbuf* pkt)
     rte_be_to_cpu_16(udph->dgram_len) - sizeof(rte_udp_hdr);
   uint16_t overall_len = payload_len;
 
+  uint16_t rand_dst_port = (rand() & 0x3ff) | 0xC00;
+
   // switch src dst ports
   udp_out_prepare(
     udph,
-    rte_be_to_cpu_16(udph->dst_port),
+    rand_dst_port,
     rte_be_to_cpu_16(udph->src_port),
     overall_len);
   overall_len += sizeof(rte_udp_hdr);
@@ -99,7 +101,6 @@ void fw_to_backup(rte_mbuf* pkt)
 
   udp_out_prepare(
     udph, 
-    // FIXME: use same UDP port for Primary here
     rte_be_to_cpu_16(udph->dst_port),
     BACKUP_UDP_PORT,
     overall_len);
