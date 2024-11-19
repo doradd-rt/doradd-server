@@ -12,7 +12,7 @@
 
 #define CLIENT_ID 1
 #define BACKUP_ID 3
-#define CLIENT_IP 0x0a0a0101
-#define BACKUP_IP 0x0a0a0103
+#define CLIENT_IP 0xc0a80101
+#define BACKUP_IP 0xc0a80103
 #define BACKUP_UDP_PORT 8081
 #define PORT_ID 0
