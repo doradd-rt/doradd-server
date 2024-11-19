@@ -136,7 +136,15 @@ static inline void ip_in(struct rte_mbuf* pkt)
   return;
 
 out:
-  printf("Wrong msg: %u, %u\n", rte_be_to_cpu_32(iph->dst_addr),rte_be_to_cpu_32(iph->src_addr));
+  printf("Wrong msg! Dst: %u.%u.%u.%u, Src: %u.%u.%u.%u\n",
+       (rte_be_to_cpu_32(iph->dst_addr) >> 24) & 0xFF,
+       (rte_be_to_cpu_32(iph->dst_addr) >> 16) & 0xFF,
+       (rte_be_to_cpu_32(iph->dst_addr) >> 8) & 0xFF,
+       rte_be_to_cpu_32(iph->dst_addr) & 0xFF,
+       (rte_be_to_cpu_32(iph->src_addr) >> 24) & 0xFF,
+       (rte_be_to_cpu_32(iph->src_addr) >> 16) & 0xFF,
+       (rte_be_to_cpu_32(iph->src_addr) >> 8) & 0xFF,
+       rte_be_to_cpu_32(iph->src_addr) & 0xFF);
   fprintf(stderr, "UNKNOWN L3 PROTOCOL OR WRONG DST IP\n");
   rte_pktmbuf_free(pkt);
 }
