@@ -121,15 +121,13 @@ public:
        AcqType acq_row4, AcqType acq_row5, AcqType acq_row6, AcqType acq_row7,
        AcqType acq_row8, AcqType acq_row9)
     {
-      /* std::cout << "hello inside when closure" << std::endl; */
       uint8_t sum = 0;
       uint16_t write_set_l = ws_cap;
       int j;
-      /* TXN(0);TXN(1);TXN(2);TXN(3);TXN(4);TXN(5);TXN(6);TXN(7);TXN(8);TXN(9); */
-      SPIN_RUN();
       
       rte_mbuf* pkt = reinterpret_cast<rte_mbuf*>(pkt_addr);
       reply_pkt(pkt);
+      SPIN_RUN();
     };
     return sizeof(DoradBuf<YCSBTransaction>);
   }
