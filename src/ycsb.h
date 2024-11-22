@@ -8,7 +8,6 @@ static constexpr uint32_t ROWS_PER_TX = 10;
 static constexpr uint32_t ROW_SIZE = 900;
 static constexpr uint32_t WRITE_SIZE = 100;
 static constexpr uint64_t DB_SIZE = 10'000'000;
-static constexpr long SPIN_TIME = 100'000;
 
 struct YCSBRow
 {
@@ -42,11 +41,6 @@ long time_ns()
   } \
   write_set_l >>= 1; \
 }
-#define SPIN_RUN() \
-  { \
-    long next_ts = time_ns() + SPIN_TIME; \
-    while (time_ns() < next_ts) _mm_pause(); \
-  } \
 
 class YCSBTransaction
 {
@@ -56,7 +50,7 @@ public:
   struct __attribute__((packed)) Marshalled
   {
     uint32_t indices[ROWS_PER_TX];
-    uint16_t write_set;
+    uint16_t spin_usec;
     uint64_t cown_ptrs[ROWS_PER_TX];
     uint8_t  pad[6];
   };
@@ -78,7 +72,7 @@ public:
     for (int i = 0; i < ROWS_PER_TX; i++)
       txm->workload.indices[i] = payload->indices[i];
 
-    txm->workload.write_set = payload->write_set; 
+    txm->workload.spin_usec = payload->spin_usec;
   }
 
   static int prepare_cowns(char* input)
@@ -109,28 +103,31 @@ public:
   {
     auto txm = reinterpret_cast<const DoradBuf<YCSBTransaction>*>(input);
 
-    auto ws_cap = txm->workload.write_set;
     auto pkt_addr = txm->pkt_addr;
+    auto spin_usec = txm->workload.spin_usec;
 
     GET_COWN(0);GET_COWN(1);GET_COWN(2);GET_COWN(3);GET_COWN(4);
     GET_COWN(5);GET_COWN(6);GET_COWN(7);GET_COWN(8);GET_COWN(9);
 
     using AcqType = acquired_cown<YCSBRow>;
-    when(row0,row1,row2,row3,row4,row5,row6,row7,row8,row9) << [ws_cap, pkt_addr]
+    when(row0,row1,row2,row3,row4,row5,row6,row7,row8,row9) << [pkt_addr, spin_usec]
       (AcqType acq_row0, AcqType acq_row1, AcqType acq_row2, AcqType acq_row3, 
        AcqType acq_row4, AcqType acq_row5, AcqType acq_row6, AcqType acq_row7,
        AcqType acq_row8, AcqType acq_row9)
     {
       /* std::cout << "hello inside when closure" << std::endl; */
       uint8_t sum = 0;
-      uint16_t write_set_l = ws_cap;
       int j;
-      /* TXN(0);TXN(1);TXN(2);TXN(3);TXN(4);TXN(5);TXN(6);TXN(7);TXN(8);TXN(9); */
-      SPIN_RUN();
+      std::cout << "spin for " << spin_usec << std::endl;
+      long spin_ns = static_cast<long>(spin_usec) * 1000;
+      long next_ts = time_ns() + spin_ns; \
+      while (time_ns() < next_ts) _mm_pause(); \
+     /* TXN(0);TXN(1);TXN(2);TXN(3);TXN(4);TXN(5);TXN(6);TXN(7);TXN(8);TXN(9); */
       
       rte_mbuf* pkt = reinterpret_cast<rte_mbuf*>(pkt_addr);
       reply_pkt(pkt);
     };
+
     return sizeof(DoradBuf<YCSBTransaction>);
   }
 
