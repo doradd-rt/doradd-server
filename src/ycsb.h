@@ -118,7 +118,7 @@ public:
       /* std::cout << "hello inside when closure" << std::endl; */
       uint8_t sum = 0;
       int j;
-      std::cout << "spin for " << spin_usec << std::endl;
+      // std::cout << "spin for " << spin_usec << std::endl;
       long spin_ns = static_cast<long>(spin_usec) * 1000;
       long next_ts = time_ns() + spin_ns; \
       while (time_ns() < next_ts) _mm_pause(); \
