@@ -423,7 +423,7 @@ class RPCHandler
           buffer[curr_idx & (BUFFER_SIZE - 1)].pkt_addr = pktAddr;
           GET_READ_HEAD();
           T::parse_pkt(read_head);
-          sched_cnt++;
+          req_cnt.fetch_add(1, std::memory_order_relaxed);
         }
         break;
         default:
@@ -431,39 +431,7 @@ class RPCHandler
           rte_pktmbuf_free(pkt);
       }
     }
-  }
-
-  void index_lookup()
-  {
-    curr_idx -= sched_cnt;
-    int ret;
-    for (int i = 0; i < sched_cnt; i++)
-    {
-      GET_READ_HEAD();
-      ret = T::prepare_cowns(read_head);
-    }
-  }
-
-  void prefetch()
-  {
-    curr_idx -= sched_cnt;
-    int ret;
-    for (int i = 0; i < sched_cnt; i++)
-    {
-      GET_READ_HEAD();
-      ret = T::prefetch_cowns(read_head);
-    }
-  }
-
-  void dispatch()
-  {
-    curr_idx -= sched_cnt;
-    int ret;
-    for (int i = 0; i < sched_cnt; i++)
-    {
-      GET_READ_HEAD();
-      ret = T::parse_and_process(read_head);
-    }
+    pkt_count = 0;
   }
 
   int main()
@@ -478,15 +446,6 @@ class RPCHandler
 
       // Parse a batch of received pkts
       parse_pkts();
-
-      index_lookup();
-
-      prefetch();
-
-      dispatch();
-
-      pkt_count = 0;
-      sched_cnt = 0;
     }
 
     return 0;
@@ -508,30 +467,30 @@ class RPCHandler
     /* rte_eal_remote_launch(TestOneDispatcher<T>::main,
      * pipeline_args_ptr.release(), lcore_id); */
 
-    /* int lcore_id = rte_lcore_id(); */
-    /* auto buffer_addr = reinterpret_cast<uint64_t>(buffer); */
+    int lcore_id = rte_lcore_id();
+    auto buffer_addr = reinterpret_cast<uint64_t>(buffer);
 
-    /* auto indexer_args_ptr = */
-    /*   std::make_unique<IndexerArgs>(&req_cnt, &channel_1, buffer_addr); */
-    /* auto prefetcher_args_ptr = */
-    /*   std::make_unique<PrefetcherArgs>(&channel_1, &channel_2, buffer_addr);
-     */
-    /* auto spawner_args_ptr = */
-    /*   std::make_unique<SpawnerArgs>(&channel_2, buffer_addr); */
+    auto indexer_args_ptr =
+      std::make_unique<IndexerArgs>(&req_cnt, &channel_1, buffer_addr);
+    auto prefetcher_args_ptr =
+       std::make_unique<PrefetcherArgs>(&channel_1, &channel_2, buffer_addr);
+     
+    auto spawner_args_ptr =
+      std::make_unique<SpawnerArgs>(&channel_2, buffer_addr);
 
-    /* rte_eal_remote_launch(Indexer<T>::main, indexer_args_ptr.release(),
-     * lcore_id + 1); */
-    /* rte_eal_remote_launch(Prefetcher<T>::main, prefetcher_args_ptr.release(),
-     * lcore_id + 2); */
-    /* rte_eal_remote_launch(Spawner<T>::main, spawner_args_ptr.release(),
-     * lcore_id + 3); */
+     rte_eal_remote_launch(Indexer<T>::main, indexer_args_ptr.release(),
+     lcore_id + 1);
+     rte_eal_remote_launch(Prefetcher<T>::main, prefetcher_args_ptr.release(),
+     lcore_id + 2);
+     rte_eal_remote_launch(Spawner<T>::main, spawner_args_ptr.release(),
+     lcore_id + 3);
 
-    /* std::cout << "Creating Indexer thread on lcore " << lcore_id + 1 <<
-     * std::endl; */
-    /* std::cout << "Creating Prefetcher thread on lcore " << lcore_id + 2 <<
-     * std::endl; */
-    /* std::cout << "Creating Spawner thread on lcore " << lcore_id + 3 <<
-     * std::endl; */
+     std::cout << "Creating Indexer thread on lcore " << lcore_id + 1 <<
+     std::endl;
+     std::cout << "Creating Prefetcher thread on lcore " << lcore_id + 2 <<
+     std::endl;
+     std::cout << "Creating Spawner thread on lcore " << lcore_id + 3 <<
+     std::endl;
   }
 
 public:
