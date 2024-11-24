@@ -10,9 +10,9 @@
 #define MAX_PKT_SIZE 1500
 #define DISPATCHER_CORES 4 
 
-#define CLIENT_ID 1
-#define BACKUP_ID 3
-#define CLIENT_IP 0xc0a80101
-#define BACKUP_IP 0xc0a80103
+#define CLIENT_ID 3
+#define BACKUP_ID 4
+#define CLIENT_IP 0xc0a80103
+#define BACKUP_IP 0xc0a80104
 #define BACKUP_UDP_PORT 8081
 #define PORT_ID 0
