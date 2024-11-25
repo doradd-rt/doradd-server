@@ -3,7 +3,7 @@
 	url = https://github.com/DPDK/dpdk.git
 [submodule "external/verona-rt"]
 	path = external/verona-rt
-	url = https://github.com/microsoft/verona-rt.git
+	url = https://github.com/Scofield626/verona-rt.git
 [submodule "external/snmalloc"]
 	path = external/snmalloc
 	url = https://github.com/microsoft/snmalloc.git
